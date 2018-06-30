@@ -60,32 +60,33 @@ contract Test {
        return callContract(theOther, callData);
    }
 
-   function callContract(address contractAddress, bytes memory data) view internal  returns(bytes memory answer) {
+   //thanks to gonzalo and alex 
+    function  callContract(address contractAddress, bytes memory data)  internal view returns(bytes memory answer) {
 
-       uint256 length = data.length;
-       // uint256 size = 0;
-       assembly {
+        uint256 length = data.length;
+        uint256 size = 0;
+        
+        assembly {
+            answer := mload(0x40)
 
-           let result := call(gas(), 
-               contractAddress, 
-               0, 
-               add(data, 0x20), 
-               length, 
-               //mload(data), 
-               0, 
-               0)
+            let result := staticcall(gas(),
+                contractAddress, 
+                add(data, 0x20), 
+                length, 
+                0, 
+                0)
+                
+            //todo return some error if result is 0
 
-           let size := returndatasize
+            size := returndatasize
+            returndatacopy(answer, 0, size)
+            mstore(answer, size)
+            mstore(0x40, add(answer,size))
+        }
 
-           answer := mload(0x40)
-
-           returndatacopy(answer, 0, size)
-           mstore(answer, size)
-           mstore(0x40, add(answer, size))
-       }
-
-       return answer;
-   }
+        return answer;
+     
+    }
 }
 
 contract TheOther
@@ -109,15 +110,21 @@ contract TheOther
         }
 
         [Fact]
-        public async void ShouldDoFunStuff()
+        public async void ShouldDoSimpleMultipleQueries()
+        {
+
+        }
+
+        [Fact]
+        public async void ShouldCallDifferentContractsUsingDataBytesArraysFixedAndVariable()
         {
             var web3 = _ethereumClientIntegrationFixture.GetWeb3();
 
             var deploymentHandler = web3.Eth.GetContractDeploymentHandler<TheOtherDeployment>();
             var deploymentReceipt = await deploymentHandler.SendRequestAndWaitForReceiptAsync();
 
-            var deploymentCallerHandler = web3.Eth.GetContractDeploymentHandler<SolidityCallAnotherContract.Contracts.Test.CQS.TestDeployment>();
-            var deploymentReceiptCaller = await deploymentCallerHandler.SendRequestAndWaitForReceiptAsync(); ;
+            var deploymentCallerHandler = web3.Eth.GetContractDeploymentHandler<TestDeployment>();
+            var deploymentReceiptCaller = await deploymentCallerHandler.SendRequestAndWaitForReceiptAsync();
 
             var callMeFunction1 = new CallMeFunction()
             {
@@ -133,7 +140,7 @@ contract TheOther
                 Data = callMeFunction1.GetCallData()
             };
 
-            var returnVarByteArray = await contracthandler.QueryAsync<CallManyContractsSameQueryFunction, List<Byte[]>>(callManyOthersFunctionMessage).ConfigureAwait(false);
+            var returnVarByteArray = await contracthandler.QueryAsync<CallManyContractsSameQueryFunction, List<byte[]>>(callManyOthersFunctionMessage).ConfigureAwait(false);
          
 
             var expected = "Hello Hi From the other contract";
@@ -156,7 +163,7 @@ contract TheOther
                 Data = callMeFunction1.GetCallData()
             };
 
-            returnVarByteArray = await contracthandler.QueryAsync<CallManyContractsSameQueryFunction, List<Byte[]>>(callManyOthersFunctionMessage).ConfigureAwait(false);
+            returnVarByteArray = await contracthandler.QueryAsync<CallManyContractsSameQueryFunction, List<byte[]>>(callManyOthersFunctionMessage).ConfigureAwait(false);
 
             firstVar = new StringTypeDecoder().Decode(returnVarByteArray[0]);
             secondVar = new StringTypeDecoder().Decode(returnVarByteArray[1]);
